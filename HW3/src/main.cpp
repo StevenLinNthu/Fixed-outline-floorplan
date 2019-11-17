@@ -44,6 +44,7 @@ struct node{
 	int idx;
 	int parent=-5, lc=-5, rc=-5;//parent, left child, right child
 	int w=0, h=0;
+	int x, y;
 	vector<tuple<int, int, int, int> > whpair;
 };
 
@@ -192,9 +193,120 @@ void build_tree(vector<int> PE){
 	}
 	return;
 }
+void cal_wh(node* tree, int picked, int idx){
+	int lc_idx, rc_idx, lc_picked, rc_picked;
+	tree[idx].w = get<0>(tree[idx].whpair[picked]);
+	tree[idx].h = get<1>(tree[idx].whpair[picked]);
+	lc_picked = get<2>(tree[idx].whpair[picked]);
+	rc_picked = get<3>(tree[idx].whpair[picked]);
+	lc_idx = tree[idx].lc;
+	rc_idx = tree[idx].rc;
+	if(lc_idx != -5) cal_wh(tree, lc_picked, lc_idx);
+	if(rc_idx != -5) cal_wh(tree, rc_picked, rc_idx);
+	return;
+}
+void cal_xy(node* tree, int idx, int x, int y){
+	tree[idx].x = x;
+	tree[idx].y = y;
+	int lc_x, lc_y, rc_x, rc_y;
+	if(tree[idx].id == -1){//V
+		lc_x = tree[idx].x;
+		lc_y = tree[idx].y;
+		rc_x = tree[idx].x + tree[tree[idx].lc].x;
+		rc_y = tree[idx].y;
+		cal_xy(tree, tree[idx].lc, lc_x, lc_y);
+		cal_xy(tree, tree[idx].rc, rc_x, rc_y);
+	}else if(tree[idx].id == -2){//H
+		lc_x = tree[idx].x;
+		lc_y = tree[idx].y;
+		rc_x = tree[idx].x;
+		rc_y = tree[idx].y + tree[tree[idx].lc].y;
+		cal_xy(tree, tree[idx].lc, lc_x, lc_y);
+		cal_xy(tree, tree[idx].rc, rc_x, rc_y);
+	}else if(tree[idx].id >=0){
+		if(blocks[tree[idx].id]->w != tree[idx].w){
+			int tmp;
+			tmp = blocks[tree[idx].id]->w;
+			blocks[tree[idx].id]->w = blocks[tree[idx].id]->h;
+			blocks[tree[idx].id]->h = tmp;
+			blocks[tree[idx].id]->rotate = !blocks[tree[idx].id]->rotate;
+		}
+		blocks[tree[idx].id]->x = x;
+		blocks[tree[idx].id]->y = y;
+	}
+	return;
+}
+
+void area_computation(stack<int> sboth, node* tree, vector<int> PE){
+	int tmp, idx1, idx2;
+	
+	while(!sboth.empty()){
+		tmp = sboth.top();
+		sboth.pop();
+		if(tree[tmp].id == -1){//V
+			idx2 = tree[tmp].rc;
+			idx1 = tree[tmp].lc;
+			tree[tmp].w = tree[tmp].h = 0;
+			tree[tmp].whpair.clear(); 
+			for(int j=0; j<tree[idx1].whpair.size(); j++){
+				for(int k=0; k<tree[idx2].whpair.size(); k++){
+					int w=0, h=0;
+					w = get<0>(tree[idx1].whpair[j]) + get<0>(tree[idx2].whpair[k]);
+					h = max(get<1>(tree[idx1].whpair[j]), get<1>(tree[idx2].whpair[k]));
+					if(tree[tmp].w==0 && tree[tmp].h==0){
+						tree[tmp].w = w;
+						tree[tmp].h = h;
+						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+					}else if(w < tree[tmp].w || h< tree[tmp].h){
+						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
+						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
+					}
+				}
+			}
+		}else{//H
+			idx2 = tree[tmp].rc;
+			idx1 = tree[tmp].lc;
+			tree[tmp].w = tree[tmp].h = 0;
+			tree[tmp].whpair.clear(); 
+			for(int j=0; j<tree[idx1].whpair.size(); j++){
+				for(int k=0; k<tree[idx2].whpair.size(); k++){
+					int w=0, h=0;
+					w = max(get<0>(tree[idx1].whpair[j]), get<0>(tree[idx2].whpair[k]));
+					h = get<1>(tree[idx1].whpair[j]) + get<1>(tree[idx2].whpair[k]);
+					if(tree[tmp].w==0 && tree[tmp].h==0){
+						tree[tmp].w = w;
+						tree[tmp].h = h;
+						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+					}else if(w < tree[tmp].w || h< tree[tmp].h){
+						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
+						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
+					}
+				}
+			}
+		}
+	}
+	//compute x, y coordinate
+	int min = 100000000, root_idx = PE.size()-1;
+	int lc_idx, rc_idx, lc_picked, rc_picked;
+	int idx, w, h, picked;
+	for(int i = 0; i<tree[root_idx].whpair.size();i++){
+		
+		w = get<0>(tree[root_idx].whpair[i]);
+		h = get<1>(tree[root_idx].whpair[i]);
+		if(w*h<min){
+			min = w*h;
+			picked = i;
+		}
+	}
+	cal_wh(tree, picked, root_idx);
+	cal_xy(tree, root_idx, 0, 0);
+	return;
+}
 
 //M1 swap two adjacent operands
-void M1_swap(vector<int> PE, node* tree){
+vector<int> M1_swap(vector<int> PE, node* tree){
 	//randomly choose a number i between 0 and numBlock-1, swap the ith operands in PE with i+1th operands
 	int min=0, cnt=0;
 	int picked = rand() % (numBlock - min + 1) + min;
@@ -251,55 +363,47 @@ void M1_swap(vector<int> PE, node* tree){
 			break;
 		}
 	}
-	while(!sboth.empty()){
-		tmp = sboth.top();
-		sboth.pop();
-		if(tree[tmp].id == -1){//V
-			idx2 = tree[tmp].rc;
-			idx1 = tree[tmp].lc;
-			tree[tmp].w = tree[tmp].h = 0;
-			tree[tmp].whpair.clear(); 
-			for(int j=0; j<tree[idx1].whpair.size(); j++){
-				for(int k=0; k<tree[idx2].whpair.size(); k++){
-					int w=0, h=0;
-					w = get<0>(tree[idx1].whpair[j]) + get<0>(tree[idx2].whpair[k]);
-					h = max(get<1>(tree[idx1].whpair[j]), get<1>(tree[idx2].whpair[k]));
-					if(tree[tmp].w==0 && tree[tmp].h==0){
-						tree[tmp].w = w;
-						tree[tmp].h = h;
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-					}else if(w < tree[tmp].w || h< tree[tmp].h){
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
-						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
-					}
-				}
-			}
-		}else{//H
-			idx2 = tree[tmp].rc;
-			idx1 = tree[tmp].lc;
-			tree[tmp].w = tree[tmp].h = 0;
-			tree[tmp].whpair.clear(); 
-			for(int j=0; j<tree[idx1].whpair.size(); j++){
-				for(int k=0; k<tree[idx2].whpair.size(); k++){
-					int w=0, h=0;
-					w = max(get<0>(tree[idx1].whpair[j]), get<0>(tree[idx2].whpair[k]));
-					h = get<1>(tree[idx1].whpair[j]) + get<1>(tree[idx2].whpair[k]);
-					if(tree[tmp].w==0 && tree[tmp].h==0){
-						tree[tmp].w = w;
-						tree[tmp].h = h;
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-					}else if(w < tree[tmp].w || h< tree[tmp].h){
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
-						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
-					}
-				}
+	area_computation(sboth, tree, PE);	
+	return PE;
+} 
+
+vector<int> M2_complement(vector<int>PE, node* tree){
+	int min=0, cnt=0, idx, tmp;
+	int picked = rand() % (PE.size()-numBlock - min + 1) + min;//range(0, number of 'V' and 'H')
+	stack<int> stk, sboth;
+	for(int i=0; i<PE.size(); i++){
+		if(PE[i]<0){
+			cnt++;
+			if(cnt == picked){
+				idx = i;
+				break;
 			}
 		}
-	}	
-	return;
-} 
+	}
+	while(tree[tree[picked].rc].id == -1 || tree[tree[picked].rc].id == -2){//find the chain content VHVHVHV....
+		picked = tree[picked].rc;
+	}
+	tmp = picked;
+	while(tree[picked].id == -1 || tree[picked].id == -2){ //HVH or VHV, progress once if it's not a chain
+		tree[picked].id = tree[picked].id==-1? -2:-1;
+		if(tree[picked].parent == -5) break;
+		if(picked == tree[tree[picked].parent].rc) picked = tree[picked].parent;
+		else break;
+	}
+	picked = tmp;
+	while(tree[picked].id == -1 || tree[picked].id == -2){
+		stk.push(picked);
+		picked = tree[picked].parent;
+		if(picked == -5) break;
+	}
+	while(!stk.empty()){
+		sboth.push(stk.top());
+		stk.pop();
+	}
+	area_computation(stk, tree, PE);	
+	return PE;
+}
+
 int SA_floorplanning(int k){
 //	E = init_sol();
 //	Best = E;
