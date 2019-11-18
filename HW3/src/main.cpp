@@ -50,11 +50,12 @@ struct node{
 
 //global var
 int numBlock, numTerminal, numNet, numPin;
-int total_area;
+int total_area, boundary, wire_length;
+int cur_w, cur_h;
 unordered_map<int, block*> blocks;
 unordered_map<int, terminal*> terminals;
 unordered_map<int, net*> nets;
-node* initTree, bestTree, localTree;
+node* initTree, *bestTree, *localTree;
 //
 
 void read_block(FILE* input){
@@ -297,6 +298,8 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 		h = get<1>(tree[root_idx].whpair[i]);
 		if(w*h<min){
 			min = w*h;
+			cur_w = w;
+			cur_h = h;
 			picked = i;
 		}
 	}
@@ -305,11 +308,53 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 	return;
 }
 
+int cal_cost(){
+	int cost = 0;
+	int A = cur_h * cur_w;
+	cost += A;
+	if(cur_h > boundary && cur_w > boundary){
+		cost += (A - boundary*boundary)*50000;
+	}else if(cur_h > boundary){
+		cost += (cur_h - boundary)*cur_w*50000;
+	}else if(cur_w > boundary){
+		cost += (cur_w - boundary)*cur_h*50000;
+	}
+	//wire length
+	wire_length = 0;
+	for(auto i=nets.begin(); i!=nets.end();i++){
+		int maxx = 0, maxy = 0;
+		int minx = 1000000, miny = 1000000;
+		int tmpx, tmpy;
+		for(auto j=i->second->blockList.begin(); j!=i->second->blockList.end(); j++){
+			tmpx = blocks[*j]->x + blocks[*j]->w/2;
+			tmpy = blocks[*j]->y + blocks[*j]->h/2;
+			maxx = tmpx >maxx? tmpx:maxx;
+			maxy = tmpy >maxy? tmpy:maxy;
+			maxx = tmpx <minx? tmpx:minx;
+			maxy = tmpy <miny? tmpy:miny;
+		}
+		for(auto j=i->second->terminalList.begin(); j!=i->second->terminalList.end(); j++){
+			tmpx = terminals[*j]->x;
+			tmpy = terminals[*j]->y;
+			maxx = tmpx >maxx? tmpx:maxx;
+			maxy = tmpy >maxy? tmpy:maxy;
+			maxx = tmpx <minx? tmpx:minx;
+			maxy = tmpy <miny? tmpy:miny;
+		}
+		wire_length += (maxx-minx)+(maxy-miny);
+	}
+	cost += wire_length;
+	return cost;
+}
+
 //M1 swap two adjacent operands
 vector<int> M1_swap(vector<int> PE, node* tree){
 	//randomly choose a number i between 0 and numBlock-1, swap the ith operands in PE with i+1th operands
-	int min=0, cnt=0;
-	int picked = rand() % (numBlock - min + 1) + min;
+	int min=1, cnt=0;
+	int picked = rand() % (numBlock - min) + min, picked2 = picked;
+	while(picked == picked2){
+		picked2 = rand() % (numBlock - min) + min;
+	}
 	int idx1 = -1, idx2 = -1;	
 	for(int i=0; i<PE.size(); i++){
 		if(PE[i]>=0){
@@ -317,12 +362,122 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 			if(cnt == picked){
 				idx1 = i;
 			}
-			if(idx1 >= 0){
+			if(cnt == picked2){
 				idx2 = i;
+			}
+		}
+	}
+	//change order in PE
+	int tmp = PE[idx1];
+	PE[idx1]= PE[idx2];
+	PE[idx2] = tmp; 
+	//change order in tree
+	node n;
+	n = tree[idx1];
+	tree[idx1] = tree[idx2];
+	tree[idx2] = n;
+	//cout<<"2"<<endl;
+	//change parent
+	tmp = tree[idx1].parent;
+	tree[idx1].parent = tree[idx2].parent;
+	tree[idx2].parent = tmp;
+	//change the area vector on path
+	//cout<<"3"<<endl;
+	stack<int> s1, s2, sboth;
+	n = tree[idx1];
+	while(n.parent!=-5){
+		s1.push(n.parent);
+		n = tree[n.parent];
+	}
+	
+	n = tree[idx2];
+	while(n.parent!=-5){
+		s2.push(n.parent);
+		n = tree[n.parent];
+	}
+	while(s1.empty() && s2.empty()){
+		if(s1.top() == s2.top()){
+			sboth.push(s1.top());
+			s1.pop();
+			s2.pop();
+		}else if(!s1.empty()){
+			sboth.push(s1.top());
+			s1.pop();
+		}else if(!s2.empty()){
+			sboth.push(s2.top());
+			s2.pop();
+		}
+	}
+	area_computation(sboth, tree, PE);	
+	return PE;
+} 
+
+vector<int> M2_complement(vector<int>PE, node* tree){
+	int min=1, cnt=0, idx, tmp;
+	int picked = rand() % (PE.size()-numBlock - min) + min;//range(0, number of 'V' and 'H')
+	stack<int> stk, sboth;
+	for(int i=0; i<PE.size(); i++){
+		if(PE[i]<0){
+			cnt++;
+			if(cnt == picked){
+				idx = i;
 				break;
 			}
 		}
 	}
+	
+	while(tree[idx].rc != -5 && (tree[tree[idx].rc].id == -1 || tree[tree[idx].rc].id == -2)){//find the chain content VHVHVHV....
+		picked = tree[idx].rc;
+	}
+	tmp = idx;
+	while(tree[idx].id == -1 || tree[idx].id == -2){ //HVH or VHV, progress once if it's not a chain
+		tree[idx].id = tree[idx].id==-1? -2:-1;
+		if(tree[idx].parent == -5) break;
+		if(idx == tree[tree[idx].parent].rc) idx = tree[idx].parent;
+		else break;
+	}
+	idx = tmp;
+	while(tree[idx].id == -1 || tree[idx].id == -2){
+		stk.push(idx);
+		idx = tree[idx].parent;
+		if(idx == -5) break;
+	}
+	while(!stk.empty()){
+		sboth.push(stk.top());
+		stk.pop();
+	}
+	area_computation(sboth, tree, PE);	
+	return PE;
+}
+
+vector<int> M3_swap(vector<int>PE, node* tree){
+	int picked, min=0, opcnt, cnt, idx1, idx2, terminate=0;
+	bool done = false;
+	while(!done){
+		if(terminate++<1000){
+			return PE;
+		}
+		opcnt = cnt = 0;
+		picked = rand() % (numBlock - min + 1) + min;
+		for(int i=0; i<PE.size(); i++){
+			if(PE[i]==-1 || PE[i]==-2){
+				opcnt++;
+			}else if(PE[i]>=0){
+				cnt++;
+				if(cnt == picked){
+					//cout<<"0.5";
+					if(PE[i+1]<0 && PE[i+1] != PE[i-1] && 2*(opcnt+1)<i){
+						cout<<"0.6";
+						idx1 = i;
+						idx2 = i+1;
+						done = true;
+					} 
+					break;
+				}
+			}
+		}
+	}
+	cout<<"1"<<endl;
 	//change order in PE
 	int tmp = PE[idx1];
 	PE[idx1]= PE[idx2];
@@ -343,12 +498,13 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 		s1.push(n.parent);
 		n = tree[n.parent];
 	}
+	
 	n = tree[idx2];
 	while(n.parent!=-5){
 		s2.push(n.parent);
 		n = tree[n.parent];
 	}
-	while(true){
+	while(s1.empty() && s2.empty()){
 		if(s1.top() == s2.top()){
 			sboth.push(s1.top());
 			s1.pop();
@@ -359,70 +515,147 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 		}else if(!s2.empty()){
 			sboth.push(s2.top());
 			s2.pop();
-		}else{
-			break;
 		}
 	}
 	area_computation(sboth, tree, PE);	
 	return PE;
-} 
-
-vector<int> M2_complement(vector<int>PE, node* tree){
-	int min=0, cnt=0, idx, tmp;
-	int picked = rand() % (PE.size()-numBlock - min + 1) + min;//range(0, number of 'V' and 'H')
-	stack<int> stk, sboth;
-	for(int i=0; i<PE.size(); i++){
-		if(PE[i]<0){
-			cnt++;
-			if(cnt == picked){
-				idx = i;
-				break;
-			}
-		}
-	}
-	while(tree[tree[picked].rc].id == -1 || tree[tree[picked].rc].id == -2){//find the chain content VHVHVHV....
-		picked = tree[picked].rc;
-	}
-	tmp = picked;
-	while(tree[picked].id == -1 || tree[picked].id == -2){ //HVH or VHV, progress once if it's not a chain
-		tree[picked].id = tree[picked].id==-1? -2:-1;
-		if(tree[picked].parent == -5) break;
-		if(picked == tree[tree[picked].parent].rc) picked = tree[picked].parent;
-		else break;
-	}
-	picked = tmp;
-	while(tree[picked].id == -1 || tree[picked].id == -2){
-		stk.push(picked);
-		picked = tree[picked].parent;
-		if(picked == -5) break;
-	}
-	while(!stk.empty()){
-		sboth.push(stk.top());
-		stk.pop();
-	}
-	area_computation(stk, tree, PE);	
-	return PE;
 }
 
-int SA_floorplanning(int k){
-//	E = init_sol();
-//	Best = E;
-//	float T0 = 10000;
-//	int M = 0, MT = 0, uphill = 0;
-//	int N = k*numBlock;
-//	while(...){
-//		
-//	}
+void copy_tree(node* t1, node* t2, int k){	
+	for(int i=0; i<k; i++){
+		t1[i] = t2[i];
+	} 
+}
+
+int cal_initT(float p, vector<int> PE, node* tree){
+	node tmpTree[PE.size()];
+	node* t = tmpTree;
+	vector<int> tmp_PE = PE;
+	copy_tree(t, tree, PE.size());
+	int tmp_cost = cal_cost();
+	int move, avg, tmp;
+	int cnt = 1000;
+	while(cnt-- >0){
+		move = rand() %3;
+		//tmp_PE = M2_complement(tmp_PE, t);
+		if(move == 0){
+			tmp_PE = M1_swap(tmp_PE, t); 
+		}else if(move == 1){
+			tmp_PE = M2_complement(tmp_PE, t); 
+		}else if(move == 2){
+			tmp_PE = M3_swap(tmp_PE, t); 
+		}
+		tmp = cal_cost();
+		avg += tmp - tmp_cost;
+		tmp_cost = tmp;
+	}
+	return (int)(avg/1000)/log(p);
 	
+}
+
+vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p, int e){// init sol, tree, rate for cooling, var k, accepting rate p
+	vector<int> E = PE, NE;
+	vector<int> Best = E;
+	bestTree = new node[2*numBlock]();
+	localTree = new node[2*numBlock]();
+	copy_tree(bestTree, tree, PE.size());
+	copy_tree(localTree, tree, PE.size());
+	int T0 = cal_initT(p, PE, tree);
+	double T =T0; 
 	
-	return 1;
+	int M = 0, MT = 0, uphill = 0, reject =0;
+	int N = k*numBlock;
+	stack<int> emptystk;
+	copy_tree(tree, bestTree, PE.size());
+	area_computation(emptystk, bestTree, E);
+	int cost = cal_cost(), d_cost = 0, n_cost, b_cost = cost;
+	
+	while(true){
+		MT = uphill = reject = 0;
+		while(true){
+			int move = rand() %3;
+			if(move == 0){
+				//cout<<"1";
+				NE = M1_swap(E, tree); 
+			}else if(move == 1){
+				//cout<<"2";
+				NE = M2_complement(E, tree); 
+			}else if(move == 2){
+				//cout<<"3";
+				NE = M3_swap(E, tree); 
+			}
+			MT++;
+			n_cost = cal_cost();//cost of NE
+			d_cost =  n_cost - cost;//cost of E
+			//cout<<"done move"<<endl;
+			if(d_cost<=0 || (double) rand() / (RAND_MAX + 1.0) < exp(-1*d_cost/T)){
+				//cout<<"accept ans:"<<d_cost<<endl;
+				if(d_cost>0) uphill++;
+				E = NE;
+				copy_tree(localTree, tree, PE.size());
+				cost = n_cost;
+				if(cost<b_cost){
+					Best = E;
+					copy_tree(tree, bestTree, PE.size());
+				}	
+			}else{
+					reject++;
+					copy_tree(tree, localTree, PE.size());
+			}
+			if(uphill>N || MT>2*N) break;
+		}
+		T = r*T;
+		cout<<"T: "<<T<<endl;
+		if((reject/MT) > 0.95 || T<e){
+			break;	
+		} 
+		
+	}
+	cout<<"done";
+	
+	return Best;
 } 
 
 int main(void){
 	FILE* input_block = fopen("../testcase/n100.hardblocks", "r");
+	FILE* input_net = fopen("../testcase/n100.nets", "r");
+	FILE* input_pl = fopen("../testcase/n100.pl", "r");
+	float r_deadspace = 0.15;
 	read_block(input_block);
+	read_net(input_net);
+	read_terminal(input_pl);
 	vector<int> PE = init_PE();
 	build_tree(PE);
+	stack<int> emptystk;
+	area_computation(emptystk, initTree, PE);
+	
+	boundary = (int)sqrt(total_area*(1+r_deadspace));
+	PE = SA_floorplanning(PE, initTree, 0.9, 5, 0.9, 10);
+	area_computation(emptystk, bestTree, PE);
+	if(cur_w < boundary && cur_h < boundary){
+		cout<<"success"<<endl;
+	}
+	//test
+//	vector<int> PE;
+//	PE.push_back(1);
+//	PE.push_back(2);
+//	PE.push_back(-2);
+//	PE.push_back(3);
+//	PE.push_back(4);
+//	PE.push_back(-1);
+//	PE.push_back(5);
+//	PE.push_back(6);
+//	PE.push_back(-1);
+//	PE.push_back(-2);
+//	PE.push_back(-1);
+//	build_tree(PE);
+//	PE = M3_swap(PE, initTree);
+	for(int i=0;i<PE.size();i++){
+		if(initTree[i].id == -1) cout<<"V";
+		else if(initTree[i].id == -2) cout<<"H";
+		else cout<<"("<<initTree[i].id<<")";
+	}
+	//M2_complement(PE, initTree);
 //pick smallest area pair from root
 //	int min = 1000000;
 //	for(int i = 0; i<initTree[PE.size()-1].whpair.size();i++){
@@ -437,3 +670,6 @@ int main(void){
 	
 	return 0;
 }
+/**
+done(11)(98)V(97)V(96)V(45)V(44)V(43)V(42)V(41)V(40)V(39)V(38)V(37)V(36)V(35)V(34)V(33)V(32)V(31)V(30)V(29)V(28)V(27)V(26)V(25)V(24)V(83)V(22)V(77)V(8)V(7)V(6)V(5)V(4)V(3)V(2)V(1)V(0)V(10)V(99)V(12)V(13)V(14)V(15)V(16)V(17)V(18)V(19)V(20)V(21)V(46)V(47)V(48)V(49)V(50)V(51)V(9)V(53)V(54)V(55)V(56)V(57)V(58)V(59)V(60)V(61)V(62)V(63)V(64)V(65)V(66)V(67)V(68)V(69)V(70)V(71)V(72)V(73)V(74)V(75)V(76)V(52)V(78)H(79)V(80)V(81)V(82)V(23)V(84)V(85)V(86)V(87)V(88)V(89)V(90)V(91)V(92)V(93)V(94)V(95)V
+**/
