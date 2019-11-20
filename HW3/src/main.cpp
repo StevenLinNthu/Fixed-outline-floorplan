@@ -54,7 +54,7 @@ int total_area, boundary, wire_length;
 int cur_w, cur_h;
 unordered_map<int, block*> blocks;
 unordered_map<int, terminal*> terminals;
-unordered_map<int, net*> nets;
+vector<net> nets;
 node* initTree, *bestTree, *localTree;
 int m1,m2,m3;
 //
@@ -92,22 +92,24 @@ void read_net(FILE* input){
 	fscanf(input, " NumPins : %d\n", &numPin);
 	int cnt = numNet;
 	while(cnt--){
-		net* tmp = new net();
+		net tmp;
 		string str;
 		char c[30];
-		fscanf(input, " NetDegree : %d\n", &tmp->deg);		
-		for(int i=0; i<tmp->deg; i++){
+		fscanf(input, " NetDegree : %d\n", &tmp.deg);		
+		for(int i=0; i<tmp.deg; i++){
 			fscanf(input, " %s\n", c);
 			str = c;
 			if(str[0] == 'p'){
 				str.erase(0,1);
-				tmp->terminalList.push_back(stoi(str));
+				tmp.terminalList.push_back(stoi(str));
 			}else{
 				str.erase(0,2);
-				tmp->blockList.push_back(stoi(str));
+				tmp.blockList.push_back(stoi(str));
 			}
 		}
+		nets.push_back(tmp);
 	}
+	
 	return;
 }
 
@@ -242,7 +244,6 @@ void cal_xy(node* tree, int idx, int x, int y){
 void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 	int tmp, idx1, idx2;
 	while(!sboth.empty()){
-		
 		tmp = sboth.top();
 		sboth.pop();
 		if(tree[tmp].id == -1){//V
@@ -266,7 +267,7 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 					}
 				}
 			}
-		}else{//H
+		}else if(tree[tmp].id == -2){//H
 			idx2 = tree[tmp].rc;
 			idx1 = tree[tmp].lc;
 			tree[tmp].w = tree[tmp].h = 0;
@@ -289,7 +290,6 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 			}
 		}
 	}
-	
 	//compute x, y coordinate
 	int min = 100000000, root_idx = PE.size()-1;
 	int lc_idx, rc_idx, lc_picked, rc_picked;
@@ -305,10 +305,10 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 			picked = i;
 		}
 	}
-	cout<<"cal_wh\n"<<endl;
 	cal_wh(tree, picked, root_idx);
-	cout<<"cal_xy\n"<<endl;
+	//cout<<"cal_xy";
 	cal_xy(tree, root_idx, 0, 0);
+	//cout<<"\r";
 	return;
 }
 
@@ -325,25 +325,25 @@ int cal_cost(){
 	}
 	//wire length
 	wire_length = 0;
-	for(auto i=nets.begin(); i!=nets.end();i++){
+	for(int i=0; i<nets.size();i++){
 		int maxx = 0, maxy = 0;
 		int minx = 1000000, miny = 1000000;
 		int tmpx, tmpy;
-		for(auto j=i->second->blockList.begin(); j!=i->second->blockList.end(); j++){
+		for(auto j=nets[i].blockList.begin(); j!=nets[i].blockList.end(); j++){
 			tmpx = blocks[*j]->x + blocks[*j]->w/2;
 			tmpy = blocks[*j]->y + blocks[*j]->h/2;
 			maxx = tmpx >maxx? tmpx:maxx;
 			maxy = tmpy >maxy? tmpy:maxy;
-			maxx = tmpx <minx? tmpx:minx;
-			maxy = tmpy <miny? tmpy:miny;
+			minx = tmpx <minx? tmpx:minx;
+			miny = tmpy <miny? tmpy:miny;
 		}
-		for(auto j=i->second->terminalList.begin(); j!=i->second->terminalList.end(); j++){
+		for(auto j=nets[i].terminalList.begin(); j!=nets[i].terminalList.end(); j++){
 			tmpx = terminals[*j]->x;
 			tmpy = terminals[*j]->y;
 			maxx = tmpx >maxx? tmpx:maxx;
 			maxy = tmpy >maxy? tmpy:maxy;
-			maxx = tmpx <minx? tmpx:minx;
-			maxy = tmpy <miny? tmpy:miny;
+			minx = tmpx <minx? tmpx:minx;
+			miny = tmpy <miny? tmpy:miny;
 		}
 		wire_length += (maxx-minx)+(maxy-miny);
 	}
@@ -372,7 +372,6 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 			}
 		}
 	}
-	cout<<"picked\n";
 	//change order in PE
 	int tmp = PE[idx1];
 	PE[idx1]= PE[idx2];
@@ -401,12 +400,13 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 		s2.push(n.parent);
 		n = tree[n.parent];
 	}
-	cout<<"stacked\n";
 	while(!s1.empty() && !s2.empty()){
 		if(s1.top() == s2.top()){
 			sboth.push(s1.top());
 			s1.pop();
 			s2.pop();
+		}else{
+			break;
 		}
 	}
 	while(!s1.empty()){
@@ -417,14 +417,14 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 		sboth.push(s2.top());
 		s2.pop();
 	}
-	cout<<"area\n";
+	cout<<"area";
 	area_computation(sboth, tree, PE);
-	cout<<"return\n";	
+	cout<<"\r";	
 	return PE;
 } 
 
 vector<int> M2_complement(vector<int>PE, node* tree){
-	int min=1, cnt=0, idx, tmp;
+	int min=2, cnt=0, idx, tmp;
 	int picked = rand() % (PE.size()-numBlock - min) + min;//range(0, number of 'V' and 'H')
 	stack<int> stk, sboth;
 	for(int i=0; i<PE.size(); i++){
@@ -498,7 +498,7 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 			}
 		}
 	}
-	cout<<"picked\n";
+	cout<<"picked";
 	//change order in PE
 	int tmp = PE[idx1];
 	PE[idx1]= PE[idx2];
@@ -508,7 +508,7 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 	n = tree[idx1];
 	tree[idx1] = tree[idx2];
 	tree[idx2] = n;
-	cout<<"changed\n";
+	cout<<"\rchanged";
 	//change parent
 	tmp = tree[idx1].parent;
 	tree[idx1].parent = tree[idx2].parent;
@@ -526,12 +526,14 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 		s2.push(n.parent);
 		n = tree[n.parent];
 	}
-	cout<<"stack\n";
+	cout<<"\rstack";
 	while(!s1.empty() && !s2.empty()){
 		if(s1.top() == s2.top()){
 			sboth.push(s1.top());
 			s1.pop();
 			s2.pop();
+		}else{
+			break;
 		}
 	}
 	while(!s1.empty()){
@@ -542,9 +544,9 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 		sboth.push(s2.top());
 		s2.pop();
 	}
-	cout<<"area\n";
+	cout<<"\rarea";
 	area_computation(sboth, tree, PE);	
-	cout<<"area done\n";
+	cout<<"\r";
 	m3++;
 	return PE;
 }
@@ -612,14 +614,16 @@ vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p
 				cout<<"1";
 				m1++;
 				NE = M1_swap(E, tree); 
+				cout<<"\r";
 			}else if(move == 1){
 				cout<<"2";
 				m2++;
 				NE = M2_complement(E, tree); 
+				cout<<"\r";
 			}else if(move == 2){
 				cout<<"3";
 				NE = M3_swap(E, tree); 
-				cout<<"done\n";
+				cout<<"\r";
 			}
 			MT++;
 			n_cost = cal_cost();//cost of NE
@@ -658,7 +662,7 @@ int main(void){
 	FILE* input_block = fopen("../testcase/n100.hardblocks", "r");
 	FILE* input_net = fopen("../testcase/n100.nets", "r");
 	FILE* input_pl = fopen("../testcase/n100.pl", "r");
-	srand(1);
+	srand(time(NULL));
 	float r_deadspace = 0.15;
 	read_block(input_block);
 	read_net(input_net);
@@ -668,16 +672,14 @@ int main(void){
 	stack<int> emptystk;
 	area_computation(emptystk, initTree, PE);
 	boundary = (int)sqrt(total_area*(1+r_deadspace));
-//	for(int m = 0;m<3500;m++){
-//		PE = M2_complement(PE, initTree);
-//	}
-	cout<<"hi0";
-	PE = SA_floorplanning(PE, initTree, 0.9, 5, 0.9, 10);
+
+	PE = SA_floorplanning(PE, initTree, 0.95, 5, 0.9, 10);
 	
-	area_computation(emptystk, initTree, PE);
+	area_computation(emptystk, bestTree, PE);
 	if(cur_w < boundary && cur_h < boundary){
 		cout<<"success"<<endl;
 	}
+	cout<<cur_w<<" "<<cur_h<<" "<<wire_length;
 	//test
 //	vector<int> PE;
 //	PE.push_back(1);
@@ -693,18 +695,28 @@ int main(void){
 //	PE.push_back(-1);
 //	build_tree(PE);
 //	PE = M3_swap(PE, initTree);
+//	for(int i=0;i<PE.size();i++){
+//		if(initTree[i].id == -1) cout<<"V";
+//		else if(initTree[i].id == -2) cout<<"H";
+//		else cout<<"("<<initTree[i].id<<")";
+//	}
+//	cout<<endl;
+//	
+	int opcnt=0, cnt=0;
 	for(int i=0;i<PE.size();i++){
-		if(initTree[i].id == -1) cout<<"V";
-		else if(initTree[i].id == -2) cout<<"H";
-		else cout<<"("<<initTree[i].id<<")";
-	}
-	cout<<endl;
-	
-	
-	for(int i=0;i<PE.size();i++){
-		if(bestTree[i].id == -1) cout<<"V";
-		else if(bestTree[i].id == -2) cout<<"H";
-		else cout<<"("<<bestTree[i].id<<")";
+		if(bestTree[i].id == -1){
+			cout<<"V";	
+			opcnt++;
+		}
+		else if(bestTree[i].id == -2){
+			cout<<"H";
+			opcnt++;	
+		} 
+		else{
+			cout<<"("<<bestTree[i].id<<")";	
+			cnt++;
+		} 
+		if(opcnt>cnt) cout<<"illegal\n";
 	}
 
 	cout<<endl<<m1<<" "<<m2<<" "<<m3;
