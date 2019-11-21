@@ -42,8 +42,9 @@ struct net{
 struct node{
 	int id;
 	int idx;
-	int parent=-5, lc=-5, rc=-5;//parent, left child, right child
-	int w=0, h=0;
+	int parent = -5;
+	int lc = -5, rc = -5;
+	int w = 0, h = 0;
 	int x, y;
 	vector<tuple<int, int, int, int> > whpair;
 };
@@ -134,7 +135,7 @@ vector<int> init_PE(){
 
 void build_tree(vector<int> PE){
 	stack<int> stk;
-	initTree = new node[2*numBlock]();
+	initTree = new node[2*numBlock-1]();
 	int idx1, idx2;
 	//use idx to indicate parent and children
 	for(int i=0; i<PE.size(); i++){
@@ -193,8 +194,13 @@ void build_tree(vector<int> PE){
 					}
 				}
 			}
+		}else{
+			cout<<"error build tree\n";
 		}
 	}
+//	for(¡Fint i=0;i<199;i++){
+//		cout<<i<<" "<<initTree[i].id<<" "<<initTree[i].parent<<" "<<initTree[i].lc<<" "<<initTree[i].rc<<"\n";
+//	}
 	return;
 }
 void cal_wh(node* tree, int picked, int idx){
@@ -288,6 +294,8 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 					}
 				}
 			}
+		}else{
+			cout<<tree[tmp].id<<" "<<tree[tree[tmp].parent].id<<" "<<tree[tmp].lc<<" "<<tree[tmp].rc<<endl;
 		}
 	}
 	//compute x, y coordinate
@@ -306,9 +314,7 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 		}
 	}
 	cal_wh(tree, picked, root_idx);
-	//cout<<"cal_xy";
 	cal_xy(tree, root_idx, 0, 0);
-	//cout<<"\r";
 	return;
 }
 
@@ -317,11 +323,11 @@ int cal_cost(){
 	int A = cur_h * cur_w;
 	cost += A;
 	if(cur_h > boundary && cur_w > boundary){
-		cost += (A - boundary*boundary)*50000;
+		cost += (A - boundary*boundary)*5000;
 	}else if(cur_h > boundary){
-		cost += (cur_h - boundary)*cur_w*50000;
+		cost += (cur_h - boundary)*cur_w*5000;
 	}else if(cur_w > boundary){
-		cost += (cur_w - boundary)*cur_h*50000;
+		cost += (cur_w - boundary)*cur_h*5000;
 	}
 	//wire length
 	wire_length = 0;
@@ -347,7 +353,7 @@ int cal_cost(){
 		}
 		wire_length += (maxx-minx)+(maxy-miny);
 	}
-	cost += (int)(0.01 * wire_length);
+	cost += (int)(0.001 * wire_length);
 	return cost;
 }
 
@@ -372,22 +378,23 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 			}
 		}
 	}
+	if(idx1 == -1 || idx2 == -1) cout<<"idx == -1"<<endl;
+	if(PE[idx1]<0 ||PE[idx2]<0) cout<<"PE[idx]<0"<<endl;
 	//change order in PE
 	int tmp = PE[idx1];
 	PE[idx1]= PE[idx2];
 	PE[idx2] = tmp; 
+	//change parent
+	tmp = tree[idx1].parent;
+	tree[idx1].parent = tree[idx2].parent;
+	tree[idx2].parent = tmp;
 	//change order in tree
 	node n;
 	n = tree[idx1];
 	tree[idx1] = tree[idx2];
 	tree[idx2] = n;
-	//cout<<"2"<<endl;
-	//change parent
-	tmp = tree[idx1].parent;
-	tree[idx1].parent = tree[idx2].parent;
-	tree[idx2].parent = tmp;
+	
 	//change the area vector on path
-	//cout<<"3"<<endl;
 	stack<int> s1, s2, sboth;
 	n = tree[idx1];
 	while(n.parent!=-5){
@@ -417,9 +424,8 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 		sboth.push(s2.top());
 		s2.pop();
 	}
-	cout<<"area";
 	area_computation(sboth, tree, PE);
-	cout<<"\r";	
+
 	return PE;
 } 
 
@@ -436,12 +442,6 @@ vector<int> M2_complement(vector<int>PE, node* tree){
 			}
 		}
 	}
-//	for(int ii=0; ii<PE.size();ii++){
-//		if(PE[ii]==-1) cout<<"V";
-//		else if(PE[ii] == -2) cout<<"H";
-//		else cout<<'('<<PE[ii]<<')';
-//	}
-//	cout<<endl;
 	while(tree[idx].rc != -5 && (tree[tree[idx].rc].id == -1 || tree[tree[idx].rc].id == -2)){//find the chain content VHVHVHV....
 		idx = tree[idx].rc;
 	}
@@ -464,7 +464,7 @@ vector<int> M2_complement(vector<int>PE, node* tree){
 		sboth.push(stk.top());
 		stk.pop();
 	}
-	area_computation(sboth, tree, PE);	
+	area_computation(sboth, tree, PE);
 	return PE;
 }
 
@@ -476,19 +476,20 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 			return PE;
 		}
 		opcnt = cnt = 0;
-		picked = rand() % (numBlock - min + 1) + min;
-		for(int i=1; i<PE.size(); i++){
+		picked = rand() % (numBlock) + 1; //1~numBlock
+		for(int i=0; i<PE.size(); i++){
 			if(PE[i]==-1 || PE[i]==-2){
 				opcnt++;
 			}else if(PE[i]>=0){
 				cnt++;
 				if(cnt == picked){
 					//cout<<"0.5";
-					if(PE[i+1]<0 && (PE[i+1] != PE[i-1]) && (cnt-1>opcnt+1)){//change operand i and operator i+1
-						idx1 = i;
-						idx2 = i+1;
-						done = true;
-					}else if(PE[i-1]<0 && (PE[i+1] != PE[i-1])){//change operand i and operator i-1
+//					if(PE[i+1]<0 && (PE[i+1] != PE[i-1]) && (cnt-1>opcnt+1)){//change operand i and operator i+1
+//						idx1 = i;
+//						idx2 = i+1;
+//						done = true;
+//					}else 
+					if(i-1>0 && PE[i-1]<0 && (PE[i+1] != PE[i-1])){//change operand i and operator i-1
 						idx1 = i;
 						idx2 = i-1;
 						done = true;
@@ -498,35 +499,41 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 			}
 		}
 	}
-	cout<<"picked";
 	//change order in PE
 	int tmp = PE[idx1];
 	PE[idx1]= PE[idx2];
-	PE[idx2] = tmp; 
+	PE[idx2] = tmp;
+	//change H/V's left child's parent to its parent
+	tmp = tree[idx2].lc;
+	tree[tree[idx2].lc].parent = tree[idx2].parent;
+	tree[tree[idx2].parent].lc = tree[idx2].lc;
+	//change H/V's left child to right child
+	tree[tree[idx2].rc].parent = idx1;
+	tree[idx2].lc = tree[idx2].rc;	
+	tree[idx2].parent = tree[idx1].parent;
+	tree[idx2].rc = idx2;
+	tree[idx1].parent = idx1;
 	//change order in tree
 	node n;
 	n = tree[idx1];
 	tree[idx1] = tree[idx2];
 	tree[idx2] = n;
-	cout<<"\rchanged";
-	//change parent
-	tmp = tree[idx1].parent;
-	tree[idx1].parent = tree[idx2].parent;
-	tree[idx2].parent = tmp;
+	
 	//change the area vector on path
 	stack<int> s1, s2, sboth;
-	n = tree[idx1];
+	n = tree[tmp];
 	while(n.parent!=-5){
+		if(tree[n.parent].id >=0) cout<<"error 1 "<<tree[n.parent].id<<" "<<n.parent<<endl;
 		s1.push(n.parent);
 		n = tree[n.parent];
 	}
 	
-	n = tree[idx2];
+	n = tree[idx2]; //idx1 is now H/V's idx
 	while(n.parent!=-5){
+		if(tree[n.parent].id >=0) cout<<"error 2 "<<tree[n.parent].id<<" "<<n.parent<<endl;
 		s2.push(n.parent);
 		n = tree[n.parent];
 	}
-	cout<<"\rstack";
 	while(!s1.empty() && !s2.empty()){
 		if(s1.top() == s2.top()){
 			sboth.push(s1.top());
@@ -544,9 +551,8 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 		sboth.push(s2.top());
 		s2.pop();
 	}
-	cout<<"\rarea";
 	area_computation(sboth, tree, PE);	
-	cout<<"\r";
+
 	m3++;
 	return PE;
 }
@@ -563,10 +569,10 @@ int cal_initT(float p, vector<int> PE, node* tree){
 	vector<int> tmp_PE = PE;
 	copy_tree(tmp_tree, tree, PE.size());
 	int tmp_cost = cal_cost();
-	int move, avg, tmp;
+	long long move, avg, tmp;
 	int cnt = 1000;
 	while(cnt-- >0){
-		move = rand() %2;
+		move = rand() %3;
 		//tmp_PE = M2_complement(tmp_PE, t);
 		if(move == 0){
 			tmp_PE = M1_swap(tmp_PE, tmp_tree); 
@@ -576,7 +582,7 @@ int cal_initT(float p, vector<int> PE, node* tree){
 			tmp_PE = M3_swap(tmp_PE, tmp_tree); 
 		}
 		tmp = cal_cost();
-		avg += tmp - tmp_cost;
+		avg += (tmp - tmp_cost);
 		tmp_cost = tmp;
 	}
 	return (int)(avg/1000)/log(p);
@@ -586,11 +592,12 @@ int cal_initT(float p, vector<int> PE, node* tree){
 vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p, int e){// init sol, tree, rate for cooling, var k, accepting rate p
 	vector<int> E = PE, NE;
 	vector<int> Best = E;
-	bestTree = new node[2*numBlock]();
-	localTree = new node[2*numBlock]();
+	bestTree = new node[2*numBlock-1]();
+	localTree = new node[2*numBlock-1]();
 	copy_tree(bestTree, tree, PE.size());
 	copy_tree(localTree, tree, PE.size());
 	int T0 = cal_initT(p, PE, tree);
+	cout<<"init T0: "<<T0<<endl;
 	double T =T0; 
 	
 	int M = 0, MT = 0, uphill = 0, reject =0;
@@ -603,12 +610,6 @@ vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p
 	while(true){
 		MT = uphill = reject = 0;
 		while(true){
-//				for(int ii=0; ii<PE.size();ii++){
-//					if(E[ii]==-1) cout<<"V";
-//					else if(E[ii] == -2) cout<<"H";
-//					else cout<<'('<<E[ii]<<')';
-//				}
-//				cout<<endl;
 			int move = rand() %3;
 			if(move == 0){
 				cout<<"1";
@@ -647,13 +648,13 @@ vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p
 			if(uphill>N || MT>2*N) break;
 		}
 		T = r*T;
-		cout<<"T: "<<T<<endl;
+		area_computation(emptystk, bestTree, E);
+		cout<<"T: "<<T<<" w: "<<cur_w<<" h: "<<cur_h<<" wire length: "<<wire_length<<endl;
 		if((reject/MT) > 0.95 || T<e){
 			break;	
 		} 
 		
 	}
-	cout<<"done";
 	
 	return Best;
 } 
@@ -672,14 +673,93 @@ int main(void){
 	stack<int> emptystk;
 	area_computation(emptystk, initTree, PE);
 	boundary = (int)sqrt(total_area*(1+r_deadspace));
-
-	PE = SA_floorplanning(PE, initTree, 0.95, 5, 0.9, 10);
+	cout<<"Boundary: "<<boundary<<endl;
+	
+	PE = SA_floorplanning(PE, initTree, 0.85, 5, 0.9, 1000);
+//	node * cmp_tree = new node[2*numBlock-1]();
+//	for(int i = 0;i<50;i++){
+//		PE = M2_complement(PE,initTree);
+//	}
+//
+//	for(int i = 0;i<50;i++){
+//		PE = M3_swap(PE,initTree);
+//	}
+//	for(int i = 0;i<199;i++){
+//		cout<<PE[i]<<" ";
+//	}
+//	cout<<endl;
+//	for(int i = 0;i<199;i++){
+//		cout<<initTree[i].id<<" ";
+//	}
+//	for(int i=0;i<PE.size();i++){
+//		if(initTree[i].id == -1){
+//			cout<<"V";	
+//		}
+//		else if(initTree[i].id == -2){
+//			cout<<"H";	
+//		} 
+//		else{
+//			cout<<"("<<initTree[i].id<<")";	
+//		} 
+//	}
+//	copy_tree(cmp_tree, initTree, PE.size());
+//	build_tree(PE);
+//	cout<<"===============parent============\n";
+//	
+//	for(int i = 0;i<PE.size();i++){
+//		if(cmp_tree[i].parent != initTree[i].parent){
+//			cout<<"error "<<i<<" "<<cmp_tree[i].parent<<" "<<initTree[i].parent;
+//		}
+//	}
+//	cout<<"\n=================lc==============\n";
+//	
+//	for(int i = 0;i<PE.size();i++){
+//		if(cmp_tree[i].lc!= initTree[i].lc){
+//			cout<<"error "<<i<<" "<<cmp_tree[i].lc<<" "<<initTree[i].lc;
+//		}
+//	}
+//	cout<<"\n=================rc==============\n";
+//	
+//	for(int i = 0;i<PE.size();i++){
+//		if(cmp_tree[i].rc != initTree[i].rc){
+//			cout<<"error "<<i<<" "<<cmp_tree[i].rc<<" "<<initTree[i].rc;
+//		}
+//	}
+//	cout<<"\n================id===============\n";
+//	for(int i = 0;i<PE.size();i++){
+//		if(cmp_tree[i].id != initTree[i].id){
+//			cout<<"error "<<i<<" "<<cmp_tree[i].id<<" "<<initTree[i].id;
+//		}
+//	}
+//	cout<<"=================================\n";
 	
 	area_computation(emptystk, bestTree, PE);
 	if(cur_w < boundary && cur_h < boundary){
 		cout<<"success"<<endl;
 	}
 	cout<<cur_w<<" "<<cur_h<<" "<<wire_length;
+
+	int opcnt=0, cnt=0;
+	for(int i=0;i<PE.size();i++){
+		if(bestTree[i].id == -1){
+			cout<<"V";	
+			opcnt++;
+		}
+		else if(bestTree[i].id == -2){
+			cout<<"H";
+			opcnt++;	
+		} 
+		else{
+			cout<<"("<<bestTree[i].id<<")";	
+			cnt++;
+		} 
+		if(opcnt>cnt) cout<<"illegal\n";
+	}
+
+	cout<<endl<<m1<<" "<<m2<<" "<<m3<<endl;
+	cout<<total_area;
+	return 0;
+}
 	//test
 //	vector<int> PE;
 //	PE.push_back(1);
@@ -702,24 +782,3 @@ int main(void){
 //	}
 //	cout<<endl;
 //	
-	int opcnt=0, cnt=0;
-	for(int i=0;i<PE.size();i++){
-		if(bestTree[i].id == -1){
-			cout<<"V";	
-			opcnt++;
-		}
-		else if(bestTree[i].id == -2){
-			cout<<"H";
-			opcnt++;	
-		} 
-		else{
-			cout<<"("<<bestTree[i].id<<")";	
-			cnt++;
-		} 
-		if(opcnt>cnt) cout<<"illegal\n";
-	}
-
-	cout<<endl<<m1<<" "<<m2<<" "<<m3;
-	return 0;
-}
-
