@@ -321,11 +321,12 @@ int cal_cost(){
 	int A = cur_h * cur_w;
 //	cost += A;
 	if(cur_h > boundary){
-		cost += (cur_h - boundary)*(cur_h - boundary);
+		cost += (cur_h - boundary)*(cur_h - boundary)*5;
 	}
 	if(cur_w > boundary){
-		cost += (cur_w - boundary)*(cur_w - boundary);
+		cost += (cur_w - boundary)*(cur_w - boundary)*5;
 	}
+	cost += (cur_h-cur_w)*(cur_h-cur_w)*2;
 //	for(auto it = blocks.begin();it!= blocks.end(); it++){
 //		if(it->second->x > boundary){
 //			cost += 1000;
@@ -464,13 +465,6 @@ vector<int> M2_complement(vector<int>PE, node* tree){
 		//cout<<idx<<" ";
 	}
 
-//	idx = tmp;
-//	
-//	while(tree[idx].id == -1 || tree[idx].id == -2){
-//		stk.push(idx);
-//		idx = tree[idx].parent;
-//		if(idx == -5) break;
-//	}
 	while(!stk.empty()){
 		sboth.push(stk.top());
 		stk.pop();
@@ -480,9 +474,20 @@ vector<int> M2_complement(vector<int>PE, node* tree){
 	return PE;
 }
 
+void print_tree(node* node) {
+	for(int i=0;i<199;i++){
+		if(node[i].lc != -5)
+		cout << i << " -> " << node[i].lc << endl;
+		if(node[i].rc != -5)
+		cout << i << " -> " << node[i].rc << endl;
+		if(node[i].parent != -5)
+		cout << i << " -> " << node[i].parent << endl;
+	}
+}
 vector<int> M3_swap(vector<int>PE, node* tree){
 	int picked, min=0, opcnt, cnt, idx1, idx2, terminate=0, tmp;
 	bool done = false;
+//	print_tree(tree);
 	while(!done){
 		if(terminate++>100){
 			return PE;
@@ -496,34 +501,43 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 				cnt++;
 				if(cnt == picked){
 					//cout<<"0.5";
-//					if(PE[i+1]<0 && (PE[i+1] != PE[i-1]) && (cnt-1>opcnt+1)){//change operand i and operator i+1
-//						idx1 = i;
-//						idx2 = i+1;
-//						done = true;
+					if(i+1 < (2*numBlock-1) && PE[i+1]<0 && (PE[i+1] != PE[i-1]) && (cnt-1>opcnt+1)){//change operand i and operator i+1
+						idx1 = i;
+						idx2 = i+1;
+						done = true;
+						//cout << "swap " << idx1 << " " << idx2 << " "<<tree[idx1].id<<endl;
+						
+						tmp = PE[idx1];
+						PE[idx1]= PE[idx2];
+						PE[idx2] = tmp;
+						//cout<<"1";
+						//change tree
+						tmp = idx2; // H/V
+						int flag = 0;
+						while(tree[tree[tmp].parent].lc == tmp){
+							tmp = tree[tmp].parent;
+							flag = 1;
+						}
+						tmp = tree[tmp].parent;
+
+						tree[tree[tmp].lc].parent = idx1;
+						tree[idx2].rc = tree[idx2].lc;
+						tree[idx2].lc = tree[tmp].lc;
+						tree[tree[idx2].rc].parent = idx1;
+						tree[tmp].lc = idx1;
+						tree[idx1].parent = tree[idx2].parent;
+						if(flag == 0 )tree[tree[idx2].parent].rc = idx2;
+						else tree[tree[idx2].parent].lc = idx2;
+						tree[idx2].parent = tmp;
 //						
-//						tmp = PE[idx1];
-//						PE[idx1]= PE[idx2];
-//						PE[idx2] = tmp;
-//						cout<<"1";
-//						//change tree
-//						tmp = tree[tree[idx2].parent].lc;
-//						tree[tree[idx2].parent].lc = idx1;
-//						tree[tree[idx2].parent].rc = idx2;
-//						tree[idx1].parent = tree[idx2].parent;
-//						tree[idx2].rc = tree[idx2].lc;
-//						tree[idx2].lc = tmp;
-//						tree[tmp].parent = idx1;
-//						tree[tree[idx2].rc].parent = idx1;
-//						
-//						cout<<"3";
-//						node n;
-//						n = tree[idx1];
-//						tree[idx1] = tree[idx2];
-//						tree[idx2] = n;
-//						
-//						
-//					}else 
+						//cout<<"3";
+						node n;
+						n = tree[idx1];
+						tree[idx1] = tree[idx2];
+						tree[idx2] = n;			
+					}else 
 					if(i-1>0 && PE[i-1]<0 && (PE[i+1] != PE[i-1])){//change operand i and operator i-1
+						//cout<<2;
 						idx1 = i;
 						idx2 = i-1;
 						done = true;
@@ -537,8 +551,11 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 						tree[tree[idx2].parent].lc = tree[idx2].lc;
 						//change H/V's left child to right child
 						tree[tree[idx2].rc].parent = idx1;
-						tree[idx2].lc = tree[idx2].rc;	
-						tree[idx2].parent = tree[idx1].parent;
+						tree[idx2].lc = tree[idx2].rc;
+						tmp = tree[idx1].parent;
+						
+						tree[idx1].parent = tree[idx2].parent;
+						tree[idx2].parent = tmp;
 						tree[idx2].rc = idx2;
 						tree[idx1].parent = idx1;
 						//change order in tree
@@ -552,21 +569,26 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 			}
 		}
 	}
-	node n;
 	//change the area vector on path
 	stack<int> s1, s2, sboth;
-	n = tree[idx1];
-	while(n.parent!=-5){
-		if(tree[n.parent].id >=0) cout<<"error 1 "<<tree[n.parent].id<<" "<<n.parent<<endl;
-		s1.push(n.parent);
-		n = tree[n.parent];
+	tmp = idx1;
+	s1.push(tmp);
+	while(tree[tmp].parent != -5 &&(tree[tree[tmp].parent].id == -1 || tree[tree[tmp].parent].id == -2)){
+		
+		s1.push(tree[tmp].parent);
+		tmp = tree[tmp].parent;
+		
+		
+
 	}
-	n = tree[idx2]; //idx1 is now H/V's idx
-	while(n.parent!=-5){
-		if(tree[n.parent].id >=0) cout<<"error 2 "<<tree[n.parent].id<<" "<<n.parent<<endl;
-		s2.push(n.parent);
-		n = tree[n.parent];
+	if(idx1 == 104) cout<<s1.size();
+
+	tmp = idx2;
+	while(tree[tmp].parent != -5 &&(tree[tree[tmp].parent].id == -1 || tree[tree[tmp].parent].id == -2)){
+		s2.push(tree[tmp].parent);
+		tmp = tree[tmp].parent;
 	}
+
 	while(!s1.empty() && !s2.empty()){
 		if(s1.top() == s2.top()){
 			sboth.push(s1.top());
@@ -647,11 +669,12 @@ vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p
 	copy_tree(tree, bestTree, PE.size());
 	area_computation(emptystk, bestTree, E);
 	int cost = cal_cost(), d_cost = 0, n_cost, b_cost = cost;
+	float avg_cost = 0;
 	
 	while(true){
 		MT = uphill = reject = 0;
 		while(true){
-			int move = rand() %3;
+			int move = T<200? 0: rand() %3;
 			if(move == 0){
 				cout<<"1";
 				m1++;
@@ -739,20 +762,23 @@ int main(void){
 	area_computation(emptystk, initTree, PE);
 	boundary = (int)sqrt(total_area*(1+r_deadspace));
 	cout<<"Boundary: "<<boundary<<endl;
+	
 //	bestTree = new node[2*numBlock-1]();
 //	copy_tree(bestTree, initTree, 199);
-	PE = SA_floorplanning(PE, initTree, 0.85, 5, 0.9, 1000);
+	PE = SA_floorplanning(PE, initTree, 0.85, 5, 0.8, 10);
 //	node * cmp_tree = new node[2*numBlock-1]();
 //	for(int i = 0;i<50;i++){
 //		PE = M2_complement(PE,initTree);
 //	}
 //
-//	for(int i = 0;i<100;i++){
-//		
+//	for(int i = 0;i<20000;i++){
+////		cout<<i;
+////		if(i == 953) print_tree(initTree);
 //		PE = M3_swap(PE,initTree);
+//		cout<<"\r";
 //	}
+//	print_tree(initTree);
 //	copy_tree(cmp_tree, initTree, PE.size());
-//	build_tree(PE);
 //	cout<<"===============parent============\n";
 //	
 //	for(int i = 0;i<PE.size();i++){
