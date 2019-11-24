@@ -44,19 +44,22 @@ struct node{
 	int parent = -5;
 	int lc = -5, rc = -5;
 	int w = 0, h = 0;
+	int curh, curw;
 	int x, y;
 	vector<tuple<int, int, int, int> > whpair;
 };
 
 //global var
 int numBlock, numTerminal, numNet, numPin;
-int total_area, boundary, wire_length;
+int total_area, boundary;
+float wire_length;
 int cur_w, cur_h;
 unordered_map<int, block*> blocks;
 unordered_map<int, terminal*> terminals;
 vector<net> nets;
 node* initTree, *bestTree, *localTree;
 int m1,m2,m3;
+timeval starttime, endtime, rectime;
 //
 
 void read_block(FILE* input){
@@ -137,8 +140,14 @@ void build_tree(vector<int> PE){
 		initTree[i].id = PE[i];
 		if(PE[i]>=0){
 			stk.push(i);
-			initTree[i].w = blocks[PE[i]]->w;
-			initTree[i].h = blocks[PE[i]]->h;
+			if(blocks[PE[i]]->w > blocks[PE[i]]->h){
+				initTree[i].w = blocks[PE[i]]->w;
+				initTree[i].h = blocks[PE[i]]->h;
+			}else{
+				initTree[i].w = blocks[PE[i]]->h;
+				initTree[i].h = blocks[PE[i]]->w;
+			}
+			
 			//cout<<PE[i]<<" "<<initTree[i].w<<" "<<initTree[i].h<<" ";
 			initTree[i].whpair.push_back(make_tuple(initTree[i].w, initTree[i].h, -1, -1));
 			if(initTree[i].w != initTree[i].h){
@@ -151,22 +160,38 @@ void build_tree(vector<int> PE){
 			stk.pop();
 			stk.push(i);
 			initTree[initTree[i].rc].parent = initTree[initTree[i].lc].parent = i;
-			for(int j=0; j<initTree[idx1].whpair.size(); j++){
-				for(int k=0; k<initTree[idx2].whpair.size(); k++){
-					int w=0, h=0;
-					w = get<0>(initTree[idx1].whpair[j]) + get<0>(initTree[idx2].whpair[k]);
-					h = max(get<1>(initTree[idx1].whpair[j]), get<1>(initTree[idx2].whpair[k]));
-					if(initTree[i].w==0 && initTree[i].h==0){
-						initTree[i].w = w;
-						initTree[i].h = h;
-						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
-					}else if(w < initTree[i].w || h< initTree[i].h){
-						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
-						initTree[i].w = initTree[i].w>w? w:initTree[i].w;
-						initTree[i].h = initTree[i].h>h? h:initTree[i].h;
-					}
+			int j=0, k=0;
+			while(j<initTree[idx1].whpair.size() && k<initTree[idx2].whpair.size()){
+				int w=0, h=0;
+				w = get<0>(initTree[idx1].whpair[j]) + get<0>(initTree[idx2].whpair[k]);
+				h = max(get<1>(initTree[idx1].whpair[j]), get<1>(initTree[idx2].whpair[k]));
+				initTree[i].whpair.push_back(make_tuple(w, h, j, k));
+				if(get<1>(initTree[idx1].whpair[j]) > get<1>(initTree[idx2].whpair[k])){
+					j++;
+				}else if(get<1>(initTree[idx1].whpair[j]) < get<1>(initTree[idx2].whpair[k])){
+					k++;
+				}else{
+					j++;
+					k++;
 				}
 			}
+			
+//			for(int j=0; j<initTree[idx1].whpair.size(); j++){
+//				for(int k=0; k<initTree[idx2].whpair.size(); k++){
+//					int w=0, h=0;
+//					w = get<0>(initTree[idx1].whpair[j]) + get<0>(initTree[idx2].whpair[k]);
+//					h = max(get<1>(initTree[idx1].whpair[j]), get<1>(initTree[idx2].whpair[k]));
+//					if(initTree[i].w==0 && initTree[i].h==0){
+//						initTree[i].w = w;
+//						initTree[i].h = h;
+//						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
+//					}else if(w < initTree[i].w || h< initTree[i].h){
+//						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
+//						initTree[i].w = initTree[i].w>w? w:initTree[i].w;
+//						initTree[i].h = initTree[i].h>h? h:initTree[i].h;
+//					}
+//				}
+//			}
 		}else if(PE[i]==-2){ //'H'
 			idx2 = initTree[i].rc = stk.top();
 			stk.pop();
@@ -174,22 +199,37 @@ void build_tree(vector<int> PE){
 			stk.pop();
 			stk.push(i);
 			initTree[initTree[i].rc].parent = initTree[initTree[i].lc].parent = i;
-			for(int j=0; j<initTree[idx1].whpair.size(); j++){
-				for(int k=0; k<initTree[idx2].whpair.size(); k++){
-					int w=0, h=0;
-					w = max(get<0>(initTree[idx1].whpair[j]), get<0>(initTree[idx2].whpair[k]));
-					h = get<1>(initTree[idx1].whpair[j]) + get<1>(initTree[idx2].whpair[k]);
-					if(initTree[i].w==0 && initTree[i].h==0){
-						initTree[i].w = w;
-						initTree[i].h = h;
-						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
-					}else if(w < initTree[i].w || h< initTree[i].h){
-						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
-						initTree[i].w = initTree[i].w>w? w:initTree[i].w;
-						initTree[i].h = initTree[i].h>h? h:initTree[i].h;
-					}
+			int j=0, k=0;
+			while(j<initTree[idx1].whpair.size() && k<initTree[idx2].whpair.size()){
+				int w=0, h=0;
+				w = max(get<0>(initTree[idx1].whpair[j]), get<0>(initTree[idx2].whpair[k]));
+				h = get<1>(initTree[idx1].whpair[j]) + get<1>(initTree[idx2].whpair[k]);
+				initTree[i].whpair.push_back(make_tuple(w, h, j, k));
+				if(get<0>(initTree[idx1].whpair[j]) < get<0>(initTree[idx2].whpair[k])){
+					j++;
+				}else if(get<0>(initTree[idx1].whpair[j]) > get<0>(initTree[idx2].whpair[k])){
+					k++;
+				}else{
+					j++;
+					k++;
 				}
 			}
+//			for(int j=0; j<initTree[idx1].whpair.size(); j++){
+//				for(int k=0; k<initTree[idx2].whpair.size(); k++){
+//					int w=0, h=0;
+//					w = max(get<0>(initTree[idx1].whpair[j]), get<0>(initTree[idx2].whpair[k]));
+//					h = get<1>(initTree[idx1].whpair[j]) + get<1>(initTree[idx2].whpair[k]);
+//					if(initTree[i].w==0 && initTree[i].h==0){
+//						initTree[i].w = w;
+//						initTree[i].h = h;
+//						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
+//					}else if(w < initTree[i].w || h< initTree[i].h){
+//						initTree[i].whpair.push_back(make_tuple(w, h, j, k));
+//						initTree[i].w = initTree[i].w>w? w:initTree[i].w;
+//						initTree[i].h = initTree[i].h>h? h:initTree[i].h;
+//					}
+//				}
+//			}
 		}else{
 			cout<<"error build tree\n";
 		}
@@ -198,8 +238,8 @@ void build_tree(vector<int> PE){
 }
 void cal_wh(node* tree, int picked, int idx){
 	int lc_idx, rc_idx, lc_picked, rc_picked;
-	tree[idx].w = get<0>(tree[idx].whpair[picked]);
-	tree[idx].h = get<1>(tree[idx].whpair[picked]);
+	tree[idx].curw = get<0>(tree[idx].whpair[picked]);
+	tree[idx].curh = get<1>(tree[idx].whpair[picked]);
 	lc_picked = get<2>(tree[idx].whpair[picked]);
 	rc_picked = get<3>(tree[idx].whpair[picked]);
 	lc_idx = tree[idx].lc;
@@ -215,7 +255,7 @@ void cal_xy(node* tree, int idx, int x, int y){
 	if(tree[idx].id == -1){//V
 		lc_x = tree[idx].x;
 		lc_y = tree[idx].y;
-		rc_x = tree[idx].x + tree[tree[idx].lc].w;
+		rc_x = tree[idx].x + tree[tree[idx].lc].curw;
 		rc_y = tree[idx].y;
 		cal_xy(tree, tree[idx].lc, lc_x, lc_y);
 		cal_xy(tree, tree[idx].rc, rc_x, rc_y);
@@ -223,11 +263,11 @@ void cal_xy(node* tree, int idx, int x, int y){
 		lc_x = tree[idx].x;
 		lc_y = tree[idx].y;
 		rc_x = tree[idx].x;
-		rc_y = tree[idx].y + tree[tree[idx].lc].h;
+		rc_y = tree[idx].y + tree[tree[idx].lc].curh;
 		cal_xy(tree, tree[idx].lc, lc_x, lc_y);
 		cal_xy(tree, tree[idx].rc, rc_x, rc_y);
 	}else if(tree[idx].id >=0){
-		if(blocks[tree[idx].id]->w != tree[idx].w){
+		if(blocks[tree[idx].id]->w != tree[idx].curw){
 			int tmp;
 			tmp = blocks[tree[idx].id]->w;
 			blocks[tree[idx].id]->w = blocks[tree[idx].id]->h;
@@ -240,7 +280,7 @@ void cal_xy(node* tree, int idx, int x, int y){
 	return;
 }
 
-void area_computation(stack<int> sboth, node* tree, vector<int> PE){
+void area_computation(stack<int> sboth, node* tree, int len){
 	int tmp, idx1, idx2;
 	while(!sboth.empty()){
 		tmp = sboth.top();
@@ -250,56 +290,83 @@ void area_computation(stack<int> sboth, node* tree, vector<int> PE){
 			idx2 = tree[tmp].rc;
 			idx1 = tree[tmp].lc;
 
-			tree[tmp].w = tree[tmp].h = 0;
 			tree[tmp].whpair.clear(); 
-			for(int j=0; j<tree[idx1].whpair.size(); j++){
-				for(int k=0; k<tree[idx2].whpair.size(); k++){
-					int w=0, h=0;
-					w = get<0>(tree[idx1].whpair[j]) + get<0>(tree[idx2].whpair[k]);
-					h = max(get<1>(tree[idx1].whpair[j]), get<1>(tree[idx2].whpair[k]));
-					if(tree[tmp].w==0 && tree[tmp].h==0){
-						
-						tree[tmp].w = w;
-						tree[tmp].h = h;
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-					}else if(w < tree[tmp].w || h< tree[tmp].h){
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
-						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
-						
-					}
+			int j=0, k=0;
+			while(j<tree[idx1].whpair.size() && k<tree[idx2].whpair.size()){
+				int w=0, h=0;
+				w = get<0>(tree[idx1].whpair[j]) + get<0>(tree[idx2].whpair[k]);
+				h = max(get<1>(tree[idx1].whpair[j]), get<1>(tree[idx2].whpair[k]));
+				tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+				if(get<1>(tree[idx1].whpair[j]) > get<1>(tree[idx2].whpair[k])){
+					j++;
+				}else if(get<1>(tree[idx1].whpair[j]) < get<1>(tree[idx2].whpair[k])){
+					k++;
+				}else{
+					j++;
+					k++;
 				}
 			}
+//			for(int j=0; j<tree[idx1].whpair.size(); j++){
+//				for(int k=0; k<tree[idx2].whpair.size(); k++){
+//					int w=0, h=0;
+//					w = get<0>(tree[idx1].whpair[j]) + get<0>(tree[idx2].whpair[k]);
+//					h = max(get<1>(tree[idx1].whpair[j]), get<1>(tree[idx2].whpair[k]));
+//					if(tree[tmp].w==0 && tree[tmp].h==0){
+//						
+//						tree[tmp].w = w;
+//						tree[tmp].h = h;
+//						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+//					}else if(w < tree[tmp].w || h< tree[tmp].h){
+//						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+//						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
+//						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
+//						
+//					}
+//				}
+//			}
 		}else if(tree[tmp].id == -2){//H
 		
 			idx2 = tree[tmp].rc;
 			idx1 = tree[tmp].lc;
-			tree[tmp].w = tree[tmp].h = 0;
 			tree[tmp].whpair.clear(); 
-			for(int j=0; j<tree[idx1].whpair.size(); j++){
-				for(int k=0; k<tree[idx2].whpair.size(); k++){
-					int w=0, h=0;
-					w = max(get<0>(tree[idx1].whpair[j]), get<0>(tree[idx2].whpair[k]));
-					h = get<1>(tree[idx1].whpair[j]) + get<1>(tree[idx2].whpair[k]);
-					if(tree[tmp].w==0 && tree[tmp].h==0){
-						tree[tmp].w = w;
-						tree[tmp].h = h;
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-					}else if(w < tree[tmp].w || h< tree[tmp].h){ 
-						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
-						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
-						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
-					}
+			int j=0, k=0;
+			while(j<tree[idx1].whpair.size() && k<tree[idx2].whpair.size()){
+				int w=0, h=0;
+				w = max(get<0>(tree[idx1].whpair[j]), get<0>(tree[idx2].whpair[k]));
+				h = get<1>(tree[idx1].whpair[j]) + get<1>(tree[idx2].whpair[k]);
+				tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+				if(get<0>(tree[idx1].whpair[j]) < get<0>(tree[idx2].whpair[k])){
+					j++;
+				}else if(get<0>(tree[idx1].whpair[j]) > get<0>(tree[idx2].whpair[k])){
+					k++;
+				}else{
+					j++;
+					k++;
 				}
 			}
+//			for(int j=0; j<tree[idx1].whpair.size(); j++){
+//				for(int k=0; k<tree[idx2].whpair.size(); k++){
+//					int w=0, h=0;
+//					w = max(get<0>(tree[idx1].whpair[j]), get<0>(tree[idx2].whpair[k]));
+//					h = get<1>(tree[idx1].whpair[j]) + get<1>(tree[idx2].whpair[k]);
+//					if(tree[tmp].w==0 && tree[tmp].h==0){
+//						tree[tmp].w = w;
+//						tree[tmp].h = h;
+//						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+//					}else if(w < tree[tmp].w || h< tree[tmp].h){ 
+//						tree[tmp].whpair.push_back(make_tuple(w, h, j, k));
+//						tree[tmp].w = tree[tmp].w>w? w:tree[tmp].w;
+//						tree[tmp].h = tree[tmp].h>h? h:tree[tmp].h;
+//					}
+//				}
+//			}
 		}else{
 			cout<<tree[tmp].id<<" "<<tree[tree[tmp].parent].id<<" "<<tree[tmp].lc<<" "<<tree[tmp].rc<<endl;
 		}
 	}
 	//compute x, y coordinate
-	int min = 100000000, root_idx = PE.size()-1;
-	int lc_idx, rc_idx, lc_picked, rc_picked;
-	int idx, w, h, picked;
+	int min = 100000000, root_idx = len;
+	int w, h, picked = 0;
 	for(int i = 0; i<tree[root_idx].whpair.size();i++){
 		
 		w = get<0>(tree[root_idx].whpair[i]);
@@ -321,12 +388,11 @@ int cal_cost(){
 	int A = cur_h * cur_w;
 //	cost += A;
 	if(cur_h > boundary){
-		cost += (cur_h - boundary)*(cur_h - boundary)*5;
+		cost += (cur_h - boundary)*(cur_h - boundary)*10;
 	}
 	if(cur_w > boundary){
-		cost += (cur_w - boundary)*(cur_w - boundary)*5;
+		cost += (cur_w - boundary)*(cur_w - boundary)*10;
 	}
-	cost += (cur_h-cur_w)*(cur_h-cur_w)*2;
 //	for(auto it = blocks.begin();it!= blocks.end(); it++){
 //		if(it->second->x > boundary){
 //			cost += 1000;
@@ -342,8 +408,8 @@ int cal_cost(){
 		float minx = 1000000, miny = 1000000;
 		float tmpx, tmpy;
 		for(auto j=nets[i].blockList.begin(); j!=nets[i].blockList.end(); j++){
-			tmpx = blocks[*j]->x + blocks[*j]->w/2.0;
-			tmpy = blocks[*j]->y + blocks[*j]->h/2.0;
+			tmpx = blocks[*j]->x + blocks[*j]->w/2;
+			tmpy = blocks[*j]->y + blocks[*j]->h/2;
 			maxx = tmpx >maxx? tmpx:maxx;
 			maxy = tmpy >maxy? tmpy:maxy;
 			minx = tmpx <minx? tmpx:minx;
@@ -359,7 +425,7 @@ int cal_cost(){
 		}
 		wire_length += (maxx-minx)+(maxy-miny);
 	}
-	cost += (int)(0.01 * wire_length);
+	cost += (int)(0.001 * wire_length);
 	return cost;
 }
 
@@ -430,13 +496,13 @@ vector<int> M1_swap(vector<int> PE, node* tree){
 		sboth.push(s2.top());
 		s2.pop();
 	}
-	area_computation(sboth, tree, PE);
+	area_computation(sboth, tree, PE.size()-1);
 
 	return PE;
 } 
 
 vector<int> M2_complement(vector<int>PE, node* tree){
-	int cnt=0, idx, tmp;
+	int cnt=0, idx = 0;
 	int picked = rand() % (numBlock - 1) + 1;//range(0, number of 'V' and 'H')
 	stack<int> stk, sboth;
 	for(int i=0; i<PE.size(); i++){
@@ -470,7 +536,7 @@ vector<int> M2_complement(vector<int>PE, node* tree){
 		stk.pop();
 	}
 
-	area_computation(sboth, tree, PE);
+	area_computation(sboth, tree, PE.size()-1);
 	return PE;
 }
 
@@ -485,9 +551,8 @@ void print_tree(node* node) {
 	}
 }
 vector<int> M3_swap(vector<int>PE, node* tree){
-	int picked, min=0, opcnt, cnt, idx1, idx2, terminate=0, tmp;
+	int picked, opcnt, cnt, idx1, idx2, terminate=0, tmp;
 	bool done = false;
-//	print_tree(tree);
 	while(!done){
 		if(terminate++>100){
 			return PE;
@@ -581,7 +646,6 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 		
 
 	}
-	if(idx1 == 104) cout<<s1.size();
 
 	tmp = idx2;
 	while(tree[tmp].parent != -5 &&(tree[tree[tmp].parent].id == -1 || tree[tree[tmp].parent].id == -2)){
@@ -606,7 +670,7 @@ vector<int> M3_swap(vector<int>PE, node* tree){
 		sboth.push(s2.top());
 		s2.pop();
 	}
-	area_computation(sboth, tree, PE);	
+	area_computation(sboth, tree, PE.size()-1);	
 
 	m3++;
 	return PE;
@@ -656,41 +720,39 @@ vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p
 	bestTree = new node[2*numBlock-1]();
 	localTree = new node[2*numBlock-1]();
 	
+	
 	copy_tree(bestTree, tree, PE.size());
 	copy_tree(localTree, tree, PE.size());
-	area_computation(emptystk, bestTree, E);
+	area_computation(emptystk, bestTree, E.size()-1);
 	int T0 = cal_initT(p, PE, tree);
 	cout<<"init T0: "<<T0<<endl;
 	double T =T0; 
 	
-	int M = 0, MT = 0, uphill = 0, reject =0;
+	int  MT = 0, uphill = 0, reject =0;
 	int N = k*numBlock;
+	bool successflag = false;
 	
 	copy_tree(tree, bestTree, PE.size());
-	area_computation(emptystk, bestTree, E);
+	area_computation(emptystk, bestTree, E.size()-1);
 	int cost = cal_cost(), d_cost = 0, n_cost, b_cost = cost;
-	float avg_cost = 0;
 	
 	while(true){
 		MT = uphill = reject = 0;
 		while(true){
-			int move = T<200? 0: rand() %3;
+			int move = T<100? 0:rand() %3;// 
 			if(move == 0){
-				cout<<"1";
 				m1++;
 				NE = M1_swap(E, tree); 
-				cout<<"\r";
 			}else if(move == 1){
-				cout<<"2";
 				m2++;
 				NE = M2_complement(E, tree); 
-				cout<<"\r";
+
 			}else if(move == 2){
-				cout<<"3";
 				NE = M3_swap(E, tree); 
-				cout<<"\r";
+
 			}
 			MT++;
+			 
 			n_cost = cal_cost();//cost of NE
 			d_cost =  n_cost - cost;//cost of E
 			cout<<"T: "<<T<<" w: "<<cur_w<<" h: "<<cur_h<<" wire length: "<<wire_length<<" cost: "<<n_cost<<"\r";
@@ -702,171 +764,103 @@ vector<int> SA_floorplanning(vector<int> PE, node* tree, float r, int k, float p
 				E = NE;
 				copy_tree(localTree, tree, PE.size());
 				cost = n_cost;
+				if(cur_h <= boundary && cur_w <= boundary && !successflag) successflag = true;
 				if(cost<b_cost){
-					Best = E;
-					b_cost = cost;
-					copy_tree(bestTree, tree, PE.size());
+					if(cur_h <= boundary && cur_w <= boundary){
+						
+					}
+					if(!successflag || (cur_h <= boundary && cur_w <= boundary)) {
+						Best = E;
+						b_cost = cost;
+						if(successflag) cout<<"\rsuccess!!                                                       "<<wire_length<<endl;
+						copy_tree(bestTree, tree, PE.size());
+					}	
 				}	
 			}else{
 					reject++;
 					copy_tree(tree, localTree, PE.size());
 			}
-//			cout<<endl;
-//			int aaaaaa;
-//			for(int i = 0; i<199;i++){
-//				if(E[i] >= 0){
-//					cout<<"("<<Best[i]<<")";
-//				}else if(Best[i] == -1){
-//					cout<<"V";
-//				}else if(Best[i] == -2){
-//					cout<<"H";
-//				}
-//			}
-//			cout << endl;
-//			cin>>aaaaaa;
 			if(uphill>N || MT>2*N) break;
 		}
 		T = r*T;
-//		area_computation(emptystk, bestTree, E);
-//		for(int i = 0; i<199;i++){
-//			if(Best[i] >= 0){
-//				cout<<"("<<Best[i]<<")";
-//			}else if(Best[i] == -1){
-//				cout<<"V";
-//			}else if(Best[i] == -2){
-//				cout<<"H";
-//			}
-//		}
-		cout<<"T: "<<T<<" w: "<<cur_w<<" h: "<<cur_h<<" wire length: "<<wire_length<<" " << (1.0*reject/MT) <<" "<< endl;
+		cout<<"T: "<<T<<" w: "<<cur_w<<" h: "<<cur_h<<" wire length: "<<wire_length<<" " << (1.0*reject/MT) <<"                   "<< endl;
 		if((1.0*reject/MT) > 0.95 || T<e){
 			break;	
 		} 
-		
+		if(T<1000) N = 3*k*numBlock;
 	}
 	
 	return Best;
 } 
 
-int main(void){
-	FILE* input_block = fopen("../testcase/n100.hardblocks", "r");
-	FILE* input_net = fopen("../testcase/n100.nets", "r");
-	FILE* input_pl = fopen("../testcase/n100.pl", "r");
+int main(int argc, char *argv[]){
+	float s=0, e=0;
+	gettimeofday(&starttime, NULL);
+	FILE* input_block = fopen(argv[1], "r");
+	FILE* input_net = fopen(argv[2], "r");
+	FILE* input_pl = fopen(argv[3], "r");
 	srand(time(NULL));
-	float r_deadspace = 0.15;
+	float r_deadspace = atof(argv[5]);
 	read_block(input_block);
 	read_net(input_net);
 	read_terminal(input_pl);
+
+
+
 	vector<int> PE = init_PE();
 	build_tree(PE);
 	stack<int> emptystk;
-	area_computation(emptystk, initTree, PE);
+	area_computation(emptystk, initTree, PE.size()-1);
 	boundary = (int)sqrt(total_area*(1+r_deadspace));
 	cout<<"Boundary: "<<boundary<<endl;
 	
-//	bestTree = new node[2*numBlock-1]();
-//	copy_tree(bestTree, initTree, 199);
-	PE = SA_floorplanning(PE, initTree, 0.85, 5, 0.8, 10);
-//	node * cmp_tree = new node[2*numBlock-1]();
-//	for(int i = 0;i<50;i++){
-//		PE = M2_complement(PE,initTree);
-//	}
-//
-//	for(int i = 0;i<20000;i++){
-////		cout<<i;
-////		if(i == 953) print_tree(initTree);
-//		PE = M3_swap(PE,initTree);
-//		cout<<"\r";
-//	}
-//	print_tree(initTree);
-//	copy_tree(cmp_tree, initTree, PE.size());
-//	cout<<"===============parent============\n";
-//	
-//	for(int i = 0;i<PE.size();i++){
-//		if(cmp_tree[i].parent != initTree[i].parent){
-//			cout<<"error "<<i<<" "<<cmp_tree[i].parent<<" "<<initTree[i].parent;
-//		}
-//	}
-//	cout<<"\n=================lc==============\n";
-//	
-//	for(int i = 0;i<PE.size();i++){
-//		if(cmp_tree[i].lc!= initTree[i].lc){
-//			cout<<"error "<<i<<" "<<cmp_tree[i].lc<<" "<<initTree[i].lc;
-//		}
-//	}
-//	cout<<"\n=================rc==============\n";
-//	
-//	for(int i = 0;i<PE.size();i++){
-//		if(cmp_tree[i].rc != initTree[i].rc){
-//			cout<<"error "<<i<<" "<<cmp_tree[i].rc<<" "<<initTree[i].rc;
-//		}
-//	}
-//	cout<<"\n================id===============\n";
-//	for(int i = 0;i<PE.size();i++){
-//		if(cmp_tree[i].id != initTree[i].id){
-//			cout<<"error "<<i<<" "<<cmp_tree[i].id<<" "<<initTree[i].id;
-//		}
-//	}
-//	cout<<"=================================\n";
-//	
-//	area_computation(emptystk, bestTree, PE);
-//	if(cur_w < boundary && cur_h < boundary){
-//		cout<<"success"<<endl;
-//	}
-//	cout<<cur_w<<" "<<cur_h<<" "<<wire_length;
-	//build_tree(PE);
-	//bestTree = new node[199]();
-	//copy_tree(bestTree, initTree, 199); 
+
+
+	PE = SA_floorplanning(PE, initTree, 0.85, 5, 0.8, 1);
+
+
 	int opcnt=0, cnt=0;
 	for(int i=0;i<PE.size();i++){
-		if(initTree[i].id == -1){
+		if(bestTree[i].id == -1){
 			cout<<"V";	
 			opcnt++;
 		}
-		else if(initTree[i].id == -2){
+		else if(bestTree[i].id == -2){
 			cout<<"H";
 			opcnt++;	
 		} 
 		else{
-			cout<<"("<<initTree[i].id<<")";	
+			cout<<"("<<bestTree[i].id<<")";	
 			cnt++;
 		} 
 		if(opcnt>cnt) cout<<"illegal\n";
 	}
-
+	area_computation(emptystk, bestTree, PE.size()-1);
+	cal_cost();
 	cout<<endl<<m1<<" "<<m2<<" "<<m3<<endl;
-	cout<<total_area;
+	cout<<"best : "<<cur_w<<" "<<cur_h<<" "<<wire_length<<endl;
+	cout<<total_area<<endl;
 	
 	//area_computation(emptystk, initTree, PE);
 	ofstream output;
-	output.open("./out.txt");
-	output<<"Wirelength "<<wire_length<<endl;
+	output.open(argv[4]);
+	output<<"Wirelength "<<(int)wire_length<<endl;
 	output<<"Blocks\n";
 	for(int i=0;i<numBlock;i++){
 		//cout<<"sb"<<i<<" "<<blocks[i]->w<<" "<<blocks[i]->h<<" "<<blocks[i]->rotate<<endl;
 		output<<"sb"<<blocks[i]->id<<" "<<blocks[i]->x<<" "<<blocks[i]->y<<" "<<blocks[i]->rotate<<endl;
 	} 
 	output.close();
+
+	gettimeofday(&endtime, NULL);
+	e = endtime.tv_sec*1000 + endtime.tv_usec/1000;
+	s = starttime.tv_sec*1000 + starttime.tv_usec/1000;
+
+	cout<<"Total time: "<<(e-s)/1000.0<<endl;
+	// cout<<"I/O time: "<<iotime<<endl;
+	// cout<<"Construct time: "<<constructtime<<endl;
+	// cout<<"Operation time: "<<optime<<endl;
+
 	return 0;
 }
-	//test
-//	vector<int> PE;
-//	PE.push_back(1);
-//	PE.push_back(2);
-//	PE.push_back(-2);
-//	PE.push_back(3);
-//	PE.push_back(4);
-//	PE.push_back(-1);
-//	PE.push_back(5);
-//	PE.push_back(6);
-//	PE.push_back(-1);
-//	PE.push_back(-2);
-//	PE.push_back(-1);
-//	build_tree(PE);
-//	PE = M3_swap(PE, initTree);
-//	for(int i=0;i<PE.size();i++){
-//		if(initTree[i].id == -1) cout<<"V";
-//		else if(initTree[i].id == -2) cout<<"H";
-//		else cout<<"("<<initTree[i].id<<")";
-//	}
-//	cout<<endl;
-//	
+
